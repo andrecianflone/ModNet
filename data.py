@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 from typing import Callable, List
+import pprint
 
 import torch
 import numpy as np
@@ -37,8 +38,8 @@ class NpDataset(Dataset):
         return X, y
 
 def operator_targets(ops: List[Callable], data: np.ndarray):
-    """ Evenly apply operators to the data, prepend with op index and return
-    target data (i.e. result of applying ops)
+    """ Evenly apply operators to the data, prepend input data with op index
+    and return target data (i.e. result of applying ops)
 
     Each op should accept a 1-D np array.
     """
@@ -61,13 +62,20 @@ def operator_targets(ops: List[Callable], data: np.ndarray):
 
 def make_op_dataset(low,high,samples, seq_len, batch_size,ops):
     """
-    Generate input of size
+    Generate a numpy dataset
+        low,high : range of values
+        samples  : num of samples
+        seq_len  : len of each sample
     """
-    # Generate random samples
+    # Generate all random samples
     x = np.random.randint(low, high, (samples, seq_len))*1.0
 
-    # Make sure no dupes
+    # Make sure no duplicates
     x = np.unique(x, axis=0)
+
+    # If there were duplicates, the dataset is shorter than expected. Now
+    # generate new samples to populate the rest. Repeat the process for max
+    # max_it times
     max_it=100
     for i in range(max_it):
         if len(x) == samples:
@@ -103,7 +111,7 @@ def make_op_dataset(low,high,samples, seq_len, batch_size,ops):
     return loaders
 
 def get_toy_data(batch_size):
-    dataset_settings = {
+    d_settings = {
             'batch_size': batch_size,
             'samples' : 100,
             'seq_len': 10,
@@ -112,13 +120,20 @@ def get_toy_data(batch_size):
             'ops' : [np.max, np.min, np.mean, np.sum]
             }
 
-    train_loader,valid_loader,test_loader = make_op_dataset(**dataset_settings)
-    return train_loader, valid_loader, test_loader, dataset_settings
+    print("Dataset settings")
+    pprint.pprint(d_settings)
+    print("Dataset functions:")
+    for op in d_settings["ops"]:
+        print(op.__name__)
+
+    train_loader,valid_loader,test_loader = make_op_dataset(**d_settings)
+    d_settings["seq_len"] = d_settings["seq_len"] + 1
+    return train_loader, valid_loader, test_loader, d_settings
 
 if __name__ == '__main__':
 
     # Test settings
-    dataset_settings = {
+    d_settings = {
             'batch_size': 5,
             'samples' : 100,
             'seq_len': 10,
@@ -127,6 +142,6 @@ if __name__ == '__main__':
             'ops' : [np.max, np.min, np.mean, np.sum]
             }
 
-    train_loader,valid_loader,test_loader = make_op_dataset(**dataset_settings)
+    train_loader,valid_loader,test_loader = make_op_dataset(**d_settings)
 
     pass
