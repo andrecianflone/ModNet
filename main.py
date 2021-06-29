@@ -7,29 +7,24 @@ from utils import utils
 
 from utils.progress import Progress
 import numpy as np
-from model import VQ
+from funcmodel import VQ
 import torch.optim as optim
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def vq_vae_loss(args, x_prime, x, vq_loss, model):
+def func_net_loss(args, x, y, vq_loss, model):
     """
-    Compute discretized recon loss, combined loss for training and bpd.
-
-    Bits per dimension (bpd) is simply nats per pixel converted to base 2.
-    -(NLL / num_pixels) / np.log(2.)
+    Compute combined loss
     """
     # Use Discretized Logistic as an alternative to MSE, see [1]
-    log_pxz = utils.discretized_logistic(x_prime, model.dec_log_stdv,
-                                                    sample=x).mean()
-    # recon_error = torch.mean((data_recon - data)**2)/args.data_variance
-    # loss = recon_error + vq_loss
+    # log_pxz = utils.discretized_logistic(x_prime, model.dec_log_stdv,
+                                                    # sample=x).mean()
 
-    loss = -1 * (log_pxz / args.num_pixels) + args.commitment_cost * vq_loss
-    elbo = - (args.KL - log_pxz) / args.num_pixels
-    bpd  = elbo / np.log(2.)
 
-    return loss, log_pxz, bpd
+    mse = nn.MSELoss()(x,y)
+    loss = mse + args.commitment_cost * vq_loss
+
+    return loss
 
 def train_epoch(args, loss_func, pbar, train_loader, model, optimizer,
                             train_bpd, train_recon_error , train_perplexity):
@@ -83,7 +78,7 @@ def main(args):
     train_loader, valid_loader, test_loader, d_settings = \
                                 data.get_toy_data(args.batch_size)
 
-    args.input_size = [d_settings["samples"]]
+    args.input_size = [d_settings["seq_len"]]
     args.downsample = args.input_size[-1]
     # args.downsample = args.input_size[-1] // args.enc_height
     # args.data_variance = data_var
@@ -116,7 +111,7 @@ def main(args):
     train_perplexity = []
     args.global_it = 0
 
-    loss_func = vq_vae_loss
+    loss_func = func_net_loss
     for epoch in range(args.num_epochs):
         pbar.epoch_start()
         train_epoch(args, loss_func, pbar, train_loader, model, optimizer,
@@ -169,7 +164,7 @@ if __name__ == '__main__':
     add('--model', type=str, choices=['vqvae'], default='vqvae')
     add('--enc_height', type=int, default=8,
             help="Encoder output size, used for downsampling and KL")
-    add('--num_hiddens', type=int, default=128,
+    add('--num_hiddens', type=int, default=10,
             help="Number of channels for Convolutions, not ResNet")
     add('--num_residual_hiddens', type=int, default = 32,
             help="Number of channels for ResNet")
@@ -192,6 +187,12 @@ if __name__ == '__main__':
             help='How many batches before decay (default: 100)')
     add('--temp_grad_update', action='store_true', default=False,
             help="Update temp only with gradient")
+
+    # Func mod settings
+    add('--emb_chunks', type=int, default=8,
+            help="Split embedding into how many chunks")
+    add('--dec_h_size', type=int, default=20,
+            help="Size of hidden decoder layer")
 
     # Misc
     add('--saved_model_name', type=str, default='func_net.pt')
