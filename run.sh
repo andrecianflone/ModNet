@@ -26,8 +26,14 @@ fi
 
 case "$1" in
         1)
-            echo "Baseline"
+            echo "Small model to test"
             eval $BASE
+                --num_hiddens 10 \
+                --embed_dim 69 \
+                --emb_chunks 3 \
+                --num_embeddings = 10 \
+                --num_hiddens = 64
+
             ;;
 
         2)
