@@ -264,3 +264,23 @@ class Decoder(nn.Module):
     def forward(self, x):
         return self.blocks(x)
 
+
+def vq_vae_loss(args, x_prime, x, vq_loss, model):
+    """
+    Compute discretized recon loss, combined loss for training and bpd.
+
+    Bits per dimension (bpd) is simply nats per pixel converted to base 2.
+    -(NLL / num_pixels) / np.log(2.)
+    """
+    # Use Discretized Logistic as an alternative to MSE, see [1]
+    log_pxz = utils.discretized_logistic(x_prime, model.dec_log_stdv,
+                                                    sample=x).mean()
+    # recon_error = torch.mean((data_recon - data)**2)/args.data_variance
+    # loss = recon_error + vq_loss
+
+    loss = -1 * (log_pxz / args.num_pixels) + args.commitment_cost * vq_loss
+    elbo = - (args.KL - log_pxz) / args.num_pixels
+    bpd  = elbo / np.log(2.)
+
+    return loss, log_pxz, bpd
+
