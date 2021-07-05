@@ -76,16 +76,22 @@ class FuncMod(nn.Module):
         downsample = args.downsample
         num_codebooks = args.num_codebooks
         dec_h_size = args.dec_h_size
+        dec_input_size = args.dec_input_size
+        data_y_size = args.data_y_size
 
         assert embed_dim % num_codebooks == 0, ("you need that last dimension"
                             " to be evenly divisible by the amt of codebooks")
 
-        self.enc = SmallEnc(in_channel, channel)
+        # Encodes input to choose function
+        self.enc_f = SmallEnc(in_channel, channel)
+
+        # Projects input to a suitable size to send to function
+        self.enc_x = SmallishEnc(in_channel, channel, dec_input_size)
 
         self.quantize_conv = nn.Conv2d(channel, embed_dim, 1)
         # self.dec = Decoder(embed_dim, in_channel, channel, num_residual_layers,
                                     # num_residual_hiddens, stride=downsample)
-        self.dec = Decoder(x_size, dec_h_size, embed_dim)
+        self.dec = Decoder(dec_input_size, dec_h_size, embed_dim,data_y_size)
 
         # build the codebooks
         self.quantize = nn.ModuleList([Quantize(embed_dim // num_codebooks,
@@ -103,19 +109,22 @@ class FuncMod(nn.Module):
         # `z_q`, shape B*EMB_DIM*CHW, is neirest neigh embeddings to x
         z_q, diff, emb_idx, ppl = self.encode(x)
 
+        # X embedded to be used for retrieved function
+        embedded_x = self.enc_x(x)
+
         # `dec`: decode `z_q` to `x` size, it is the image reconstruction
-        dec = self.decode(z_q)
+        dec = self.decode(z_q, embedded_x)
 
         return dec, diff, ppl
 
     def encode(self, x):
         # Encode x to continuous space
-        pre_z_e = self.enc(x)
+        pre_f_e = self.enc_f(x)
         # Project that space to the proper size for embedding comparison
-        z_e = self.quantize_conv(pre_z_e)
+        z_f = self.quantize_conv(pre_f_e)
 
         # Divide into multiple chunks to fit each codebook
-        z_e_s = z_e.chunk(len(self.quantize), 1)
+        z_e_s = z_f.chunk(len(self.quantize), 1)
 
         z_q_s, enc_indices, encodings = [], [], []
         diffs = 0.
@@ -146,8 +155,8 @@ class FuncMod(nn.Module):
 
         return z_q, diffs, encoding_indices, perplexity
 
-    def decode(self, quant):
-        return self.dec(quant)
+    def decode(self, quant, embedded_x):
+        return self.dec(quant, embedded_x)
 
 class ResBlock(nn.Module):
     def __init__(self, in_channel, channel):
@@ -174,6 +183,21 @@ class SmallEnc(nn.Module):
         self.lin = nn.Sequential(
             nn.Linear(in_size, h_size, bias=True),
             nn.ReLU(inplace=True)
+        )
+
+    def forward(self, x):
+        r = self.lin(x)
+        return r
+
+class SmallishEnc(nn.Module):
+    """ Small conv encoder for toy data """
+    def __init__(self, in_size, h_size, out_size):
+        super().__init__()
+
+        self.lin = nn.Sequential(
+            nn.Linear(in_size, h_size, bias=True),
+            nn.ReLU(inplace=True),
+            nn.Linear(h_size, out_size, bias=True),
         )
 
     def forward(self, x):
@@ -233,10 +257,9 @@ class Decoder(nn.Module):
     """
     Decoder which is basically the embedding reshape
     """
-    def __init__(self, x_size, h_size, embed_dim):
+    def __init__(self, x_size, h_size, embed_dim, out_size):
         super().__init__()
         self.embed_dim  = embed_dim # size of input layer
-        self.num_layers = num_layers # num of chunks to split vector
 
         in_size = x_size
         self.net = nn.Sequential(
@@ -252,7 +275,7 @@ class Decoder(nn.Module):
 
         assert param_count == embed_dim, "Embedding and net size don't match"
 
-    def forward(self, x):
+    def forward(self, quant_fn, x):
 
         # Load decoder params from embedding
         for size in param_count_ls:
