@@ -27,12 +27,14 @@ fi
 case "$1" in
         1)
             echo "Small model to test"
-            eval $BASE
+            eval $BASE \
                 --num_hiddens 10 \
-                --embed_dim 69 \
+                --embed_dim 121 \
                 --emb_chunks 3 \
-                --num_embeddings = 10 \
-                --num_hiddens = 64
+                --num_embeddings 10 \
+                --num_hiddens 64
+
+
 
             ;;
 
