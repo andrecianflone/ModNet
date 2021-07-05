@@ -7,7 +7,7 @@ from utils import utils
 
 from utils.progress import Progress
 import numpy as np
-from funcmodel import VQ
+from funcmodel import FuncMod
 import torch.optim as optim
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -87,7 +87,7 @@ def main(args):
     print(f"Test set size {len(test_loader.dataset)}")
 
     print("Loading model")
-    model = VQ(args).to(device)
+    model = FuncMod(args).to(device)
     print(f'The model has {utils.count_parameters(model):,} trainable params')
 
     optimizer = optim.Adam(model.parameters(),lr=args.learning_rate,
@@ -191,7 +191,11 @@ if __name__ == '__main__':
     # Func mod settings
     add('--emb_chunks', type=int, default=8,
             help="Split embedding into how many chunks")
-    add('--dec_h_size', type=int, default=20,
+    add('--dec_input_size', type=int, default=10,
+            help="Size of decoder's first layer")
+    add('--dec_h_size', type=int, default=10,
+            help="Size of hidden decoder layer")
+    add('--data_y_size', type=int, default=1,
             help="Size of hidden decoder layer")
 
     # Misc
