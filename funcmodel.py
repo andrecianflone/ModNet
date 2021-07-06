@@ -23,19 +23,31 @@ class Quantize(nn.Module):
         self.register_buffer('embed_avg', embed.clone())
 
     def forward(self, x):
+        """
+        Returns:
+            quantize  : closest embedding in codebook
+            diff      : difference between embedding and prediction
+            embed_ind : embedding index
+            encodings : one-hot of embed_in
+
+        """
         flatten = x.reshape(-1, self.dim)
+        # Get distance between x and all vectors in codebook
         # Dist: squared-L2(p,q) = ||p||^2 + ||q||^2 - 2pq
         dist = (
             flatten.pow(2).sum(1, keepdim=True)
             - 2 * flatten @ self.embed
             + self.embed.pow(2).sum(0, keepdim=True)
         )
+        # Return index of closest neighbour
         _, embed_ind = (-dist).max(1)
         encodings = F.one_hot(embed_ind, self.num_embeddings)
         encodings = encodings.type(flatten.dtype) # cast
-        embed_ind = embed_ind.view(*x.shape[:-1])
+        # embed_ind = embed_ind.view(*x.shape[:-1])
+        # Get corresponding embeddings from codebook
         quantize = self.embed_code(embed_ind)
 
+        # Move average encodings
         if self.training:
             self.cluster_size.data.mul_(self.decay).add_(
                 1 - self.decay, encodings.sum(0)
@@ -49,6 +61,7 @@ class Quantize(nn.Module):
             embed_normalized = self.embed_avg / cluster_size.unsqueeze(0)
             self.embed.data.copy_(embed_normalized)
 
+        x = x.squeeze()
         diff = (quantize.detach() - x).pow(2).mean()
         # The +- `x` is the "straight-through" gradient trick!
         quantize = x + (quantize - x).detach()
@@ -88,7 +101,8 @@ class FuncMod(nn.Module):
         # Projects input to a suitable size to send to function
         self.enc_x = SmallishEnc(in_channel, channel, dec_input_size)
 
-        self.quantize_conv = nn.Conv2d(channel, embed_dim, 1)
+        # self.quantize_conv = nn.Conv2d(channel, embed_dim, 1)
+        self.quantize_conv = nn.Conv1d(channel, embed_dim, 1)
         # self.dec = Decoder(embed_dim, in_channel, channel, num_residual_layers,
                                     # num_residual_hiddens, stride=downsample)
         self.dec = Decoder(dec_input_size, dec_h_size, embed_dim,data_y_size)
@@ -121,7 +135,7 @@ class FuncMod(nn.Module):
         # Encode x to continuous space
         pre_f_e = self.enc_f(x)
         # Project that space to the proper size for embedding comparison
-        z_f = self.quantize_conv(pre_f_e)
+        z_f = self.quantize_conv(pre_f_e.unsqueeze(-1))
 
         # Divide into multiple chunks to fit each codebook
         z_e_s = z_f.chunk(len(self.quantize), 1)
@@ -129,12 +143,13 @@ class FuncMod(nn.Module):
         z_q_s, enc_indices, encodings = [], [], []
         diffs = 0.
 
-        # `argmin`: the indices corresponding to closest embedding in codebook
+        # `enc_ind`: the indices corresponding to closest embedding in codebook
         # `z_q`: same size as z_e_s but now holds the vectors from codebook
         # `diff`: MSE(embeddings in z_e_s, closest in codebooks)
         for z_e, quantize in zip(z_e_s, self.quantize):
             # z_e, change shape form  BCHW to BHWC
-            z_q, diff, enc_ind, enc = quantize(z_e.permute(0, 2, 3, 1))
+            # z_q, diff, enc_ind, enc = quantize(z_e.permute(0, 2, 3, 1))
+            z_q, diff, enc_ind, enc = quantize(z_e)
             z_q_s   += [z_q]
             encodings += [enc]
             enc_indices += [enc_ind]
@@ -151,7 +166,7 @@ class FuncMod(nn.Module):
         # Stack the z_q_s and permute, now `z_q` has the same shape as the
         # first z_e
         z_q = torch.cat(z_q_s, dim=-1)
-        z_q = z_q.permute(0, 3, 1, 2)
+        # z_q = z_q.permute(0, 3, 1, 2)
 
         return z_q, diffs, encoding_indices, perplexity
 
@@ -270,26 +285,30 @@ class Decoder(nn.Module):
 
         # Assert codebook embedding is the same size as decoder total params
         # TODO
-        param_count_ls = [p.numel() for p in self.net.parameters()]
-        param_count = sum(param_count_ls)
+        self.param_count_ls = [p.numel() for p in self.net.parameters()]
+        param_count = sum(self.param_count_ls)
 
         assert param_count == embed_dim, "Embedding and net size don't match"
 
     def forward(self, quant_fn, x):
 
+        # TODO: below only for batch size 1
+        quant_fn = quant_fn.squeeze()
+        idx = 0
         # Load decoder params from embedding
-        for size in param_count_ls:
-            pass
+        for p in self.net.parameters():
+            # Get appropriate num of params from embedding
+            end_idx = idx + p.numel()
+            new_vec = quant_fn[idx:end_idx]
+            # Reshape to match
+            new_vec = torch.reshape(new_vec, p.shape)
+            # Override with codebook params
+            p = new_vec
+            idx = end_idx
+
+        result = self.net(x)
 
         return result
-
-    def pop_embedding(self, param, emb):
-        pass
-        # TODO: Get size of current params
-
-        # TODO: Load this size from embedding and set it in param
-
-        # TODO: Yield the next set
 
 
 class oldDecoder(nn.Module):
