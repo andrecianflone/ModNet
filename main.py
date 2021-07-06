@@ -9,6 +9,7 @@ from utils.progress import Progress
 import numpy as np
 from funcmodel import FuncMod
 import torch.optim as optim
+from torch import nn
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -26,8 +27,50 @@ def func_net_loss(args, x, y, vq_loss, model):
 
     return loss
 
+def evaluate(args, loss_func, pbar, valid_loader, model, valid_loss):
+    """
+    Train for one epoch
+    """
+    model.test()
+    # Loop data in epoch
+    for x, y in valid_loader:
+
+        # This break used for debugging
+        if args.max_iterations is not None:
+            if args.global_it > args.max_iterations:
+                break
+
+        x = x.to(args.device)
+        y = y.to(args.device)
+
+        # Get reconstruction and vector quantization loss
+        # `x_prime`: reconstruction of `input`
+        # `vq_loss`: MSE(encoded embeddings, nearest emb in codebooks)
+        x_prime, vq_loss, perplexity = model(x)
+
+        # loss, log_pxz, bpd = loss_func(args, x_prime, y, vq_loss, model)
+        loss = loss_func(args, x_prime, y, vq_loss, model)
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        # train_bpd.append((-1)*bpd.item())
+        # train_recon_error.append((-1)*log_pxz.item())
+        # train_perplexity.append(perplexity.item())
+
+        train_loss.append(loss.item())
+
+        # Print Average every 100 steps
+        if (args.global_it+1) % 100 == 0:
+            # av_bpd = np.mean(train_bpd[-100:])
+            av_loss = np.mean(train_loss[-100:])
+            pbar.print_train(loss=float(av_loss), increment=100)
+            # pbar.print_train(loss=float(av_bpd), rec_err=float(av_rec_err),
+                                        # ppl=float(perplexity), increment=100)
+        args.global_it += 1
 def train_epoch(args, loss_func, pbar, train_loader, model, optimizer,
-                            train_bpd, train_recon_error , train_perplexity):
+                            train_bpd, train_loss , train_perplexity):
     """
     Train for one epoch
     """
@@ -41,33 +84,33 @@ def train_epoch(args, loss_func, pbar, train_loader, model, optimizer,
                 break
 
         x = x.to(args.device)
+        y = y.to(args.device)
 
         # Get reconstruction and vector quantization loss
         # `x_prime`: reconstruction of `input`
         # `vq_loss`: MSE(encoded embeddings, nearest emb in codebooks)
         x_prime, vq_loss, perplexity = model(x)
 
-        loss, log_pxz, bpd = loss_func(args, x_prime, x, vq_loss, model)
+        # loss, log_pxz, bpd = loss_func(args, x_prime, y, vq_loss, model)
+        loss = loss_func(args, x_prime, y, vq_loss, model)
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
-        train_bpd.append((-1)*bpd.item())
-        train_recon_error.append((-1)*log_pxz.item())
-        train_perplexity.append(perplexity.item())
+        # train_bpd.append((-1)*bpd.item())
+        # train_recon_error.append((-1)*log_pxz.item())
+        # train_perplexity.append(perplexity.item())
+
+        train_loss.append(loss.item())
 
         # Print Average every 100 steps
         if (args.global_it+1) % 100 == 0:
-            av_bpd = np.mean(train_bpd[-100:])
-            av_rec_err = np.mean(train_recon_error[-100:])
-            av_ppl = np.mean(train_perplexity[-100:])
-            if args.model == 'vqvae':
-                pbar.print_train(bpd=float(av_bpd), rec_err=float(av_rec_err),
-                                        ppl=float(perplexity), increment=100)
-            elif args.model == 'diffvqvae':
-                pbar.print_train(bpd=float(av_bpd), temp=float(model.temp),
-                                        ppl=float(perplexity), increment=100)
+            # av_bpd = np.mean(train_bpd[-100:])
+            av_loss = np.mean(train_loss[-100:])
+            pbar.print_train(loss=float(av_loss), increment=100)
+            # pbar.print_train(loss=float(av_bpd), rec_err=float(av_rec_err),
+                                        # ppl=float(perplexity), increment=100)
         args.global_it += 1
 
 def main(args):
@@ -109,13 +152,14 @@ def main(args):
     train_bpd = []
     train_recon_error = []
     train_perplexity = []
+    train_loss = []
     args.global_it = 0
 
     loss_func = func_net_loss
     for epoch in range(args.num_epochs):
         pbar.epoch_start()
         train_epoch(args, loss_func, pbar, train_loader, model, optimizer,
-                                train_bpd, train_recon_error, train_perplexity)
+                                train_bpd, train_loss, train_perplexity)
         # loss, _ = test(valid_loader, model, args)
         # pbar.print_eval(loss)
         valid_loss = evaluate(args, loss_func, pbar, valid_loader, model)

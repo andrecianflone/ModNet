@@ -103,7 +103,8 @@ def make_op_dataset(low,high,samples, seq_len, batch_size,ops):
                   'shuffle': True,
                   'num_workers': 6}
 
-        x_in, y = torch.from_numpy(x_in), torch.from_numpy(y)
+        x_in = torch.from_numpy(np.float32(x_in))
+        y = torch.from_numpy(np.float32(y))
         dataset = torch.utils.data.TensorDataset(x_in, y)
         loader = torch.utils.data.DataLoader(dataset, **params)
         loaders.append(loader)

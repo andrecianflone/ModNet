@@ -32,7 +32,8 @@ case "$1" in
                 --embed_dim 121 \
                 --emb_chunks 3 \
                 --num_embeddings 10 \
-                --num_hiddens 64
+                --num_hiddens 64 \
+                --batch_size 1
 
 
 
