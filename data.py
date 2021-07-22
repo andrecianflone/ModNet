@@ -111,13 +111,13 @@ def make_op_dataset(low,high,samples, seq_len, batch_size,ops):
 
     return loaders
 
-def get_toy_data(batch_size):
+def get_toy_data(args):
     d_settings = {
-            'batch_size': batch_size,
-            'samples' : 100,
-            'seq_len': 10,
-            'low' : 0,
-            'high' : 100,
+            'batch_size': args.batch_size,
+            'samples' : args.toy_dataset_size,
+            'seq_len': args.toy_seq_len,
+            'low' : args.toy_min_value,
+            'high' : args.toy_max_value,
             'ops' : [np.max, np.min, np.mean, np.sum]
             }
 
