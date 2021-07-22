@@ -96,7 +96,8 @@ class FuncMod(nn.Module):
                             " to be evenly divisible by the amt of codebooks")
 
         # Encodes input to choose function
-        self.enc_f = SmallEnc(in_channel, channel)
+        # self.enc_f = SmallEnc(in_channel, channel)
+        self.enc_f = SmallishEnc(in_channel, channel, embed_dim)
 
         # Projects input to a suitable size to send to function
         self.enc_x = SmallishEnc(in_channel, channel, dec_input_size)
@@ -129,13 +130,14 @@ class FuncMod(nn.Module):
         # `dec`: decode `z_q` to `x` size, it is the image reconstruction
         dec = self.decode(z_q, embedded_x)
 
-        return dec, diff, ppl
+        return dec, diff, emb_idx, ppl
 
     def encode(self, x):
         # Encode x to continuous space
         pre_f_e = self.enc_f(x)
         # Project that space to the proper size for embedding comparison
-        z_f = self.quantize_conv(pre_f_e.unsqueeze(-1))
+        # z_f = self.quantize_conv(pre_f_e.unsqueeze(-1))
+        z_f = pre_f_e.unsqueeze(-1)
 
         # Divide into multiple chunks to fit each codebook
         z_e_s = z_f.chunk(len(self.quantize), 1)
