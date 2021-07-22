@@ -1,5 +1,8 @@
 import os
+from typing import List
+from collections import Counter
 import numpy as np
+from math import log, e
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -55,4 +58,24 @@ def maybe_create_dir(path):
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+def entropy_from_samples(samples: List[int], categories: int) -> float:
+    """
+    Given a list of ids and number of categories, returns categorical entropy
+    """
+    counts = Counter(samples)
+    cat_probs = []
+    for i in range(categories):
+        cat_probs.append(counts[i]/len(samples))
+    # assert sum(cat_probs)>1, "Categories probs greater than 1"
+
+    # Compute entropy with base e log
+    ent=0.
+    for p in cat_probs:
+        if p > 0:
+            ent -= p * log(p, e)
+
+    return ent
+
+
 
