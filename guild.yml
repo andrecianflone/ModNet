@@ -1,0 +1,16 @@
+
+small:
+  description: Train a very small model just to test
+  main: main
+  flags:
+    num_hiddens: 10
+    num_hiddens: 10
+    embed_dim: 121
+    emb_chunks: 3
+    num_embeddings: 10
+    num_hiddens: 64
+    batch_size: 1
+    num_epochs: 2
+    toy_dataset_size: 1000
+  output-scalars: 'epoch (?P<step>\step)  train loss (?P<loss>\value)  val loss (?P<val_loss>\value)'
+# loss: 49638.4377| ent: 1.0162| [##########] | last val: 39642.3584
