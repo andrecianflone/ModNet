@@ -33,13 +33,28 @@ case "$1" in
                 --emb_chunks 3 \
                 --num_embeddings 10 \
                 --num_hiddens 64 \
-                --batch_size 1
-
-
+                --batch_size 1 \
+                --num_epochs 100 \
+                --toy_dataset_size 10000
 
             ;;
 
         2)
+            echo "Very small model to test"
+            eval $BASE \
+                --num_hiddens 10 \
+                --embed_dim 36 \
+                --emb_chunks 3 \
+                --num_embeddings 10 \
+                --dec_input_size 5 \
+                --dec_h_size 5 \
+                --batch_size 1 \
+                --num_epochs 100 \
+                --toy_dataset_size 10000
+
+            ;;
+
+        3)
             echo "Non-mon"
             eval $BASE \
                 --nlayers 1 \
