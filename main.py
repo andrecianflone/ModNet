@@ -27,54 +27,40 @@ def func_net_loss(args, x, y, vq_loss, model):
 
     return loss
 
-def evaluate(args, loss_func, pbar, valid_loader, model, valid_loss):
+def evaluate(args, loss_func, pbar, valid_loader, model):
     """
     Train for one epoch
     """
-    model.test()
-    # Loop data in epoch
-    for x, y in valid_loader:
+    model.eval()
+    valid_loss = []
+    with torch.no_grad():
+        # Loop data in epoch
+        for x, y in valid_loader:
 
-        # This break used for debugging
-        if args.max_iterations is not None:
-            if args.global_it > args.max_iterations:
-                break
+            x = x.to(args.device)
+            y = y.to(args.device)
 
-        x = x.to(args.device)
-        y = y.to(args.device)
+            # Get reconstruction and vector quantization loss
+            # `x_prime`: reconstruction of `input`
+            # `vq_loss`: MSE(encoded embeddings, nearest emb in codebooks)
+            x_prime, vq_loss, emb_idx, perplexity = model(x)
 
-        # Get reconstruction and vector quantization loss
-        # `x_prime`: reconstruction of `input`
-        # `vq_loss`: MSE(encoded embeddings, nearest emb in codebooks)
-        x_prime, vq_loss, perplexity = model(x)
+            # loss, log_pxz, bpd = loss_func(args, x_prime, y, vq_loss, model)
+            loss = loss_func(args, x_prime, y, vq_loss, model)
 
-        # loss, log_pxz, bpd = loss_func(args, x_prime, y, vq_loss, model)
-        loss = loss_func(args, x_prime, y, vq_loss, model)
+            valid_loss.append(loss.item())
 
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+    av_loss = np.mean(valid_loss)
+    pbar.print_eval(float(av_loss))
+    return av_loss
 
-        # train_bpd.append((-1)*bpd.item())
-        # train_recon_error.append((-1)*log_pxz.item())
-        # train_perplexity.append(perplexity.item())
-
-        train_loss.append(loss.item())
-
-        # Print Average every 100 steps
-        if (args.global_it+1) % 100 == 0:
-            # av_bpd = np.mean(train_bpd[-100:])
-            av_loss = np.mean(train_loss[-100:])
-            pbar.print_train(loss=float(av_loss), increment=100)
-            # pbar.print_train(loss=float(av_bpd), rec_err=float(av_rec_err),
-                                        # ppl=float(perplexity), increment=100)
-        args.global_it += 1
 def train_epoch(args, loss_func, pbar, train_loader, model, optimizer,
                             train_bpd, train_loss , train_perplexity):
     """
     Train for one epoch
     """
     model.train()
+    train_cb_entropy = []
     # Loop data in epoch
     for x, y in train_loader:
 
@@ -89,7 +75,10 @@ def train_epoch(args, loss_func, pbar, train_loader, model, optimizer,
         # Get reconstruction and vector quantization loss
         # `x_prime`: reconstruction of `input`
         # `vq_loss`: MSE(encoded embeddings, nearest emb in codebooks)
-        x_prime, vq_loss, perplexity = model(x)
+        x_prime, vq_loss, emb_idx, perplexity = model(x)
+
+        # Save for entropy calculation
+        train_cb_entropy.extend(emb_idx.tolist())
 
         # loss, log_pxz, bpd = loss_func(args, x_prime, y, vq_loss, model)
         loss = loss_func(args, x_prime, y, vq_loss, model)
@@ -105,10 +94,13 @@ def train_epoch(args, loss_func, pbar, train_loader, model, optimizer,
         train_loss.append(loss.item())
 
         # Print Average every 100 steps
-        if (args.global_it+1) % 100 == 0:
+        if (args.global_it) % 100 == 0:
+            # Compute entropy
+            ent = utils.entropy_from_samples(train_cb_entropy[-100:], args.num_embeddings)
             # av_bpd = np.mean(train_bpd[-100:])
             av_loss = np.mean(train_loss[-100:])
-            pbar.print_train(loss=float(av_loss), increment=100)
+            step = args.global_it
+            pbar.print_train(loss=float(av_loss), ent=float(ent), step=step, increment=100)
             # pbar.print_train(loss=float(av_bpd), rec_err=float(av_rec_err),
                                         # ppl=float(perplexity), increment=100)
         args.global_it += 1
@@ -119,7 +111,7 @@ def main(args):
     ###############################
     print("Loading data")
     train_loader, valid_loader, test_loader, d_settings = \
-                                data.get_toy_data(args.batch_size)
+                                data.get_toy_data(args)
 
     args.input_size = [d_settings["seq_len"]]
     args.downsample = args.input_size[-1]
@@ -166,15 +158,9 @@ def main(args):
         if valid_loss < best_valid_loss:
             best_valid_loss = valid_loss
             best_valid_epoch = epoch
-            torch.save(model.state_dict(), args.save_path)
+            # torch.save(model.state_dict(), args.save_path)
         pbar.print_end_epoch()
 
-    print("Plotting training results")
-    utils.plot_results(train_recon_error, train_perplexity,
-                                                        "results/train.png")
-
-    print("Evaluate and plot validation set")
-    generate_samples(model, valid_loader)
 
 if __name__ == '__main__':
 
@@ -221,19 +207,19 @@ if __name__ == '__main__':
             help='Orthogonal regularization coef (default: 1e-6)')
 
     # Diff NearNeigh settings
-    add('--nn_temp', type=float, default=20.0, metavar='M',
-            help='Starting diff. nearest neighbour temp (default: 1.0)')
-    add('--min_temp', type=float, default=1.01, metavar='M',
-            help='Minimum Nearest neighbour temp (default: 0.01)')
-    add('--temp_decay_rate', type=float, default=0.9, metavar='M',
-            help='Nearest neighbour temp decay rate (default: 0.9)')
-    add('--temp_decay_schedule', type=float, default=100, metavar='M',
-            help='How many batches before decay (default: 100)')
-    add('--temp_grad_update', action='store_true', default=False,
-            help="Update temp only with gradient")
+    # add('--nn_temp', type=float, default=20.0, metavar='M',
+            # help='Starting diff. nearest neighbour temp (default: 1.0)')
+    # add('--min_temp', type=float, default=1.01, metavar='M',
+            # help='Minimum Nearest neighbour temp (default: 0.01)')
+    # add('--temp_decay_rate', type=float, default=0.9, metavar='M',
+            # help='Nearest neighbour temp decay rate (default: 0.9)')
+    # add('--temp_decay_schedule', type=float, default=100, metavar='M',
+            # help='How many batches before decay (default: 100)')
+    # add('--temp_grad_update', action='store_true', default=False,
+            # help="Update temp only with gradient")
 
     # Func mod settings
-    add('--emb_chunks', type=int, default=8,
+    add('--emb_chunks', type=int, default=3,
             help="Split embedding into how many chunks")
     add('--dec_input_size', type=int, default=10,
             help="Size of decoder's first layer")
@@ -241,6 +227,16 @@ if __name__ == '__main__':
             help="Size of hidden decoder layer")
     add('--data_y_size', type=int, default=1,
             help="Size of hidden decoder layer")
+
+    # Toy dataset settings
+    add('--toy_dataset_size', type=int, default=1000,
+            help="How many total samples, split between train/val/test")
+    add('--toy_seq_len', type=int, default=10,
+            help="Sequence length of each sample")
+    add('--toy_min_value', type=int, default=0,
+            help="Minimum value in sequence")
+    add('--toy_max_value', type=int, default=100,
+            help="Max value in sequence")
 
     # Misc
     add('--saved_model_name', type=str, default='func_net.pt')
