@@ -1,16 +1,62 @@
 
-small:
-  description: Train a very small model just to test
-  main: main
-  flags:
-    num_hiddens: 10
-    num_hiddens: 10
-    embed_dim: 121
-    emb_chunks: 3
-    num_embeddings: 10
-    num_hiddens: 64
-    batch_size: 1
-    num_epochs: 2
-    toy_dataset_size: 1000
-  output-scalars: 'epoch (?P<step>\step)  train loss (?P<loss>\value)  val loss (?P<val_loss>\value)'
-# loss: 49638.4377| ent: 1.0162| [##########] | last val: 39642.3584
+- model: modular
+  description: A sample model
+  label: mod
+  sourcecode:
+    - exclude: '*swp'
+    - exclude: 'tags'
+    - exclude: '__pycache__/'
+  output-scalars:
+    step: 'step: (\step)'
+    loss: 'loss: (\value)'
+    val_loss: 'last val: (\value)'
+    ent: 'ent: (\value)'
+  operations:
+
+    small:
+      main: main
+      description: Train a very small model just to test
+      label: mod
+      flags:
+        line_return: True
+        num_hiddens: 10
+        embed_dim: 121
+        emb_chunks: 3
+        num_embeddings: 10
+        num_hiddens: 64
+        batch_size: 1
+        num_epochs: 100
+        toy_dataset_size: 1000
+      output-scalars:
+        step: 'step: (\step)'
+        loss: 'loss: (\value)'
+        val_loss: 'last val: (\value)'
+        ent: 'ent: (\value)'
+
+    search:
+      description: Train a very small model just to test
+      main: main
+      label: mod
+      flags:
+        line_return: True
+        num_hiddens: 10
+        embed_dim: 121
+        emb_chunks: 3
+        num_embeddings: 10
+        num_hiddens: 64
+        batch_size: 1
+        num_epochs: 100
+        toy_seq_len: 10
+        toy_min_value: 0
+        toy_max_value: 100
+        toy_dataset_size: [100, 1000, 10000, 100000]
+      output-scalars:
+        step: 'step: (\step)'
+        loss: 'loss: (\value)'
+        val_loss: 'last val: (\value)'
+        ent: 'ent: (\value)'
+
+- dask:
+  operations:
+    scheduler:
+      workers: 2
