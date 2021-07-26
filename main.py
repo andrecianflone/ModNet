@@ -130,7 +130,8 @@ def main(args):
 
     print(f"Start training for {args.num_epochs} epochs")
     num_batches = math.ceil(len(train_loader.dataset)/train_loader.batch_size)
-    pbar = Progress(num_batches, bar_length=10, custom_increment=True)
+    pbar = Progress(num_batches, bar_length=10, custom_increment=True,
+            line_return=args.line_return)
 
     # Needed for bpd
     # args.KL = args.enc_height * args.enc_height * args.num_codebooks * \
@@ -242,6 +243,8 @@ if __name__ == '__main__':
     add('--saved_model_name', type=str, default='func_net.pt')
     add('--saved_model_dir', type=str, default='saved_models/')
     add('--seed', type=int, default=521)
+    add('--line_return', action='store_true', default=False,
+            help="If True, print one line in output per batch")
 
     args = parser.parse_args()
 

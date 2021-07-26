@@ -7,11 +7,12 @@ class Progress():
   """ Pretty print progress for neural net training """
   def __init__(self, batches, best_val=float('inf'), test_val=0, epoch=0,
         progress_bar=True, bar_length=30, track_best=True,
-        custom_increment=False):
+        custom_increment=False, line_return=False):
     """
 
     Args
         custom_increment: If True, must provide batch increment in `print_trian`
+        line_return: If true, one line per batch, don't overwrite
     """
     self.progress_bar = progress_bar # boolean
     self.bar_length = bar_length
@@ -28,6 +29,7 @@ class Progress():
     self.pause_bar = False
     self.bar_char = "#"
     self.custom_increment = custom_increment
+    self.line_return=line_return
     if custom_increment == True:
         self.pause_bar = True
 
@@ -58,12 +60,14 @@ class Progress():
     for k,v in kwargs.items():
         if k=="increment":
             continue
-        values += '| {}: {:>3.4f}'.format(k,v)
+        values += '| {}: {:>3.4f} '.format(k,v)
     self.last_train='{:2.0f}: sec: {:>3.0f} | t-min: {:>5.1f} '.format(
         self.epoch, epoch_time, total_time) + values
     print(self.last_train, end='')
     self.print_bar()
     print(self.last_eval, end='\r')
+    if self.line_return==True:
+        print()
 
   def print_cust(self, msg):
     """ Print anything, append previous """
@@ -97,3 +101,4 @@ class Progress():
     progress ="| [{}{}] ".format(self.bar_char*bars_full, '-'*bars_empty)
     self.last_train += progress
     print(progress, end='')
+
