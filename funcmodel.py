@@ -106,7 +106,8 @@ class FuncMod(nn.Module):
         self.quantize_conv = nn.Conv1d(channel, embed_dim, 1)
         # self.dec = Decoder(embed_dim, in_channel, channel, num_residual_layers,
                                     # num_residual_hiddens, stride=downsample)
-        self.dec = Decoder(dec_input_size, dec_h_size, embed_dim,data_y_size)
+        self.dec = BatchDecoder(dec_input_size, dec_h_size, embed_dim,
+                                                    data_y_size, num_embeddings)
 
         # build the codebooks
         self.quantize = nn.ModuleList([Quantize(embed_dim // num_codebooks,
@@ -128,7 +129,7 @@ class FuncMod(nn.Module):
         embedded_x = self.enc_x(x)
 
         # `dec`: decode `z_q` to `x` size, it is the image reconstruction
-        dec = self.decode(z_q, embedded_x)
+        dec = self.decode(z_q, embedded_x, emb_idx)
 
         return dec, diff, emb_idx, ppl
 
@@ -270,9 +271,10 @@ class Encoder(nn.Module):
         return self.blocks(x)
 
 
-class Decoder(nn.Module):
+class SingleDecoder(nn.Module):
     """
-    Decoder which is basically the embedding reshape
+    Decoder which handles codebook to output function processing. This class
+    only works with a batch size of 1 sample
     """
     def __init__(self, x_size, h_size, embed_dim, out_size):
         super().__init__()
@@ -292,9 +294,74 @@ class Decoder(nn.Module):
 
         assert param_count == embed_dim, "Embedding and net size don't match"
 
-    def forward(self, quant_fn, x):
+    def forward(self, quant_fn, x, emb_idx):
+        """
+        Gets data and function vector weights. Weights are injected into networks and then the model computes a forward pass. Pytorch networks are created on the fly to receive the function weights.
+        Args:
+            quant_fn: codebook vectors
+            x: the original data embedded
+            emb_idx: codebook vector index
+        """
 
         # TODO: below only for batch size 1
+        quant_fn = quant_fn.squeeze()
+        idx = 0
+        # Load decoder params from embedding
+        for p in self.net.parameters():
+            # Get appropriate num of params from embedding
+            end_idx = idx + p.numel()
+            new_vec = quant_fn[idx:end_idx]
+            # Reshape to match
+            new_vec = torch.reshape(new_vec, p.shape)
+            # Override with codebook params
+            p = new_vec
+            idx = end_idx
+
+        result = self.net(x)
+
+        return result
+
+
+class BatchDecoder(nn.Module):
+    """
+    Decoder which handles codebook to output function processing. This class
+    works with larger batch sizes
+    """
+    def __init__(self, x_size, h_size, embed_dim, num_embeddings, out_size):
+        super().__init__()
+        self.embed_dim  = embed_dim # size of input layer
+
+        in_size = x_size
+
+        # Create a function network for each codebook embedding
+        _nets = []
+        for _ in range(num_embeddings):
+            _nets.append(nn.Sequential(
+                nn.Linear(in_size, h_size, bias=True),
+                nn.ReLU(inplace=True),
+                nn.Linear(h_size, out_size, bias=True),
+            ))
+        self.nets = nn.ModuleList(_nets)
+
+        # Assert codebook embedding is the same size as decoder total params
+        # TODO
+        self.param_count_ls = [p.numel() for p in self.nets[0].parameters()]
+        param_count = sum(self.param_count_ls)
+
+        assert param_count == embed_dim, "Embedding and net size don't match"
+
+    def forward(self, quant_fn, x, emb_idx):
+        """
+        Gets data and function vector weights. Weights are injected into
+        networks and then the model computes a forward pass. Pytorch networks
+        are created on the fly to receive the function weights.
+        Args:
+            quant_fn: codebook vectors
+            x: the original data embedded
+            emb_idx: codebook vector index
+        """
+
+        #k
         quant_fn = quant_fn.squeeze()
         idx = 0
         # Load decoder params from embedding

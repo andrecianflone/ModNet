@@ -33,9 +33,9 @@ case "$1" in
                 --emb_chunks 3 \
                 --num_embeddings 10 \
                 --num_hiddens 64 \
-                --batch_size 1 \
+                --batch_size 3 \
                 --num_epochs 100 \
-                --toy_dataset_size 10000
+                --toy_dataset_size 100
 
             ;;
 
