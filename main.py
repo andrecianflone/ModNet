@@ -94,7 +94,7 @@ def train_epoch(args, loss_func, pbar, train_loader, model, optimizer,
         train_loss.append(loss.item())
 
         # Print Average every 100 steps
-        if (args.global_it) % 100 == 0:
+        if (args.global_it) % 10 == 0:
             # Compute entropy
             ent = utils.entropy_from_samples(train_cb_entropy[-100:], args.num_embeddings)
             # av_bpd = np.mean(train_bpd[-100:])

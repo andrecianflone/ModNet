@@ -2,6 +2,7 @@ import utils
 import torch
 from torch import nn
 from torch.nn import functional as F
+from collections import OrderedDict
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -173,8 +174,8 @@ class FuncMod(nn.Module):
 
         return z_q, diffs, encoding_indices, perplexity
 
-    def decode(self, quant, embedded_x):
-        return self.dec(quant, embedded_x)
+    def decode(self, quant, embedded_x, emb_idx):
+        return self.dec(quant, embedded_x, emb_idx)
 
 class ResBlock(nn.Module):
     def __init__(self, in_channel, channel):
@@ -327,7 +328,7 @@ class BatchDecoder(nn.Module):
     Decoder which handles codebook to output function processing. This class
     works with larger batch sizes
     """
-    def __init__(self, x_size, h_size, embed_dim, num_embeddings, out_size):
+    def __init__(self, x_size, h_size, embed_dim, out_size, num_embeddings):
         super().__init__()
         self.embed_dim  = embed_dim # size of input layer
 
@@ -344,7 +345,6 @@ class BatchDecoder(nn.Module):
         self.nets = nn.ModuleList(_nets)
 
         # Assert codebook embedding is the same size as decoder total params
-        # TODO
         self.param_count_ls = [p.numel() for p in self.nets[0].parameters()]
         param_count = sum(self.param_count_ls)
 
@@ -358,30 +358,67 @@ class BatchDecoder(nn.Module):
         Args:
             quant_fn: codebook vectors
             x: the original data embedded
-            emb_idx: codebook vector index
+            emb_idx: codebook vector index for each sample
         """
 
-        #k
-        quant_fn = quant_fn.squeeze()
-        idx = 0
-        # Load decoder params from embedding
-        for p in self.net.parameters():
-            # Get appropriate num of params from embedding
-            end_idx = idx + p.numel()
-            new_vec = quant_fn[idx:end_idx]
-            # Reshape to match
-            new_vec = torch.reshape(new_vec, p.shape)
-            # Override with codebook params
-            p = new_vec
-            idx = end_idx
+        # quant_fn = quant_fn.squeeze()
+        processed = []
+        # Loop the networks
+        for e_idx, q_idx in zip(emb_idx.tolist(), range(len(quant_fn))):
+            # Skip if we've already processed this network
+            if e_idx in processed:
+                continue
+            # Load decoder params from embedding
+            idx = 0
+            for p in self.nets[e_idx].parameters():
+                # Get appropriate num of params from embedding
+                end_idx = idx + p.numel()
+                new_vec = quant_fn[q_idx, idx:end_idx]
+                # Reshape to match
+                new_vec = torch.reshape(new_vec, p.shape)
+                # Override with codebook params
+                p = new_vec
+                idx = end_idx
+            processed.append(e_idx)
 
-        result = self.net(x)
+        # Split batch according to functions chosen
+        # Get the set of function ids
+        unique = set(emb_idx.tolist())
+        # Get corresponding indices in x
+        batch_ids = OrderedDict()
+        for fn_id in unique:
+            batch_ids[fn_id] = \
+                    (emb_idx == fn_id).nonzero(as_tuple=False)
+
+        # Load the batches
+        batches = OrderedDict()
+        for fn_id, batch_id in batch_ids.items():
+            batches[fn_id] = torch.index_select(x, 0, batch_id.squeeze())
+
+        # Run the networks in parallel streams
+        results = []
+        streams = [torch.cuda.Stream() for _ in range(len(unique))]
+        torch.cuda.synchronize()
+        count = 0
+        for fn_id, batch in batches.items():
+            with torch.cuda.stream(streams[count]):
+                results.append(self.nets[fn_id](batch))
+            count += 1
+        torch.cuda.synchronize()
+
+        # Bring back to a single batch in the same original order
+        stacked = torch.cat(results, dim=0)
+        ids = list(batch_ids.values())
+        ids = torch.cat(ids, dim=0).squeeze()
+        ids = ids.sort()[1]
+        result = torch.index_select(stacked, 0, ids)
 
         return result
 
 
 class oldDecoder(nn.Module):
-    def __init__(self, in_channel, out_channel, channel, num_residual_layers, num_residual_hiddens, stride):
+    def __init__(self, in_channel, out_channel, channel, num_residual_layers,
+                num_residual_hiddens, stride):
         super().__init__()
 
         blocks = [nn.Conv2d(in_channel, channel, 3, padding=1)]
