@@ -60,7 +60,12 @@ class Progress():
     for k,v in kwargs.items():
         if k=="increment":
             continue
-        values += '| {}: {:>3.4f} '.format(k,v)
+        # Format for int
+        if type(v) == int:
+            values += '| {}: {:>3} '.format(k,v)
+        # Format for float
+        else:
+            values += '| {}: {:>3.4f} '.format(k,v)
     self.last_train='{:2.0f}: sec: {:>3.0f} | t-min: {:>5.1f} '.format(
         self.epoch, epoch_time, total_time) + values
     print(self.last_train, end='')
