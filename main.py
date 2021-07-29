@@ -25,7 +25,10 @@ def func_net_loss(args, x, y, vq_loss, model):
     mse = nn.MSELoss()(x,y)
     loss = mse + args.commitment_cost * vq_loss
 
-    return loss
+    # Measure x-y loss as a percentage, for plotting purposes
+    diff = torch.mean(torch.abs(y/x-1)).detach()
+
+    return loss, diff
 
 def evaluate(args, loss_func, pbar, valid_loader, model):
     """
@@ -46,7 +49,7 @@ def evaluate(args, loss_func, pbar, valid_loader, model):
             x_prime, vq_loss, emb_idx, perplexity = model(x)
 
             # loss, log_pxz, bpd = loss_func(args, x_prime, y, vq_loss, model)
-            loss = loss_func(args, x_prime, y, vq_loss, model)
+            loss, diff = loss_func(args, x_prime, y, vq_loss, model)
 
             valid_loss.append(loss.item())
 
@@ -81,7 +84,7 @@ def train_epoch(args, loss_func, pbar, train_loader, model, optimizer,
         train_cb_entropy.extend(emb_idx.tolist())
 
         # loss, log_pxz, bpd = loss_func(args, x_prime, y, vq_loss, model)
-        loss = loss_func(args, x_prime, y, vq_loss, model)
+        loss, diff = loss_func(args, x_prime, y, vq_loss, model)
 
         optimizer.zero_grad()
         loss.backward()
@@ -94,13 +97,15 @@ def train_epoch(args, loss_func, pbar, train_loader, model, optimizer,
         train_loss.append(loss.item())
 
         # Print Average every 100 steps
-        if (args.global_it) % 10 == 0:
+        if (args.global_it) % args.print_every == 0:
             # Compute entropy
-            ent = utils.entropy_from_samples(train_cb_entropy[-100:], args.num_embeddings)
+            ent = utils.entropy_from_samples(train_cb_entropy[-100:],
+                                                        args.num_embeddings)
             # av_bpd = np.mean(train_bpd[-100:])
             av_loss = np.mean(train_loss[-100:])
             step = args.global_it
-            pbar.print_train(loss=float(av_loss), ent=float(ent), step=step, increment=100)
+            pbar.print_train(step=step, loss=float(av_loss), diff=float(diff),
+                                    ent=float(ent), increment=args.print_every)
             # pbar.print_train(loss=float(av_bpd), rec_err=float(av_rec_err),
                                         # ppl=float(perplexity), increment=100)
         args.global_it += 1
@@ -240,6 +245,8 @@ if __name__ == '__main__':
             help="Max value in sequence")
 
     # Misc
+    add('--print_every', type=int, default=100,
+            help="Print train results after this many batches")
     add('--saved_model_name', type=str, default='func_net.pt')
     add('--saved_model_dir', type=str, default='saved_models/')
     add('--seed', type=int, default=521)

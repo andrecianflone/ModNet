@@ -32,10 +32,11 @@ case "$1" in
                 --embed_dim 121 \
                 --emb_chunks 3 \
                 --num_embeddings 10 \
-                --num_hiddens 64 \
-                --batch_size 32 \
-                --num_epochs 100 \
-                --toy_dataset_size 1000
+                --print_every 10 \
+                --num_hiddens 256 \
+                --batch_size 256 \
+                --num_epochs 200 \
+                --toy_dataset_size 20000
 
             ;;
 
