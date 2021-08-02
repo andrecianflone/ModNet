@@ -16,15 +16,15 @@
     small:
       main: main
       description: Train a very small model just to test
-      label: mod
+      label: small
       flags:
         line_return: True
-        num_hiddens: 10
         embed_dim: 121
         emb_chunks: 3
         num_embeddings: 10
-        num_hiddens: 64
-        batch_size: 1
+        num_hiddens: [10, 20]
+        batch_size: 256
+        print_every: 10
         num_epochs: 100
         toy_dataset_size: 1000
       output-scalars:
@@ -33,30 +33,48 @@
         val_loss: 'last val: (\value)'
         ent: 'ent: (\value)'
 
-    search:
-      description: Train a very small model just to test
+    med:
       main: main
+      description: Search a few hparams
       label: mod
       flags:
         line_return: True
-        num_hiddens: 10
         embed_dim: 121
         emb_chunks: 3
         num_embeddings: 10
-        num_hiddens: 64
-        batch_size: 1
-        num_epochs: 100
-        toy_seq_len: 10
-        toy_min_value: 0
-        toy_max_value: 100
-        toy_dataset_size: [100, 1000, 10000, 100000]
+        num_hiddens: 256
+        batch_size: 256
+        print_every: 100
+        num_epochs: 200
+        toy_dataset_size: 20000
       output-scalars:
         step: 'step: (\step)'
         loss: 'loss: (\value)'
+        diff: 'diff: (\value)'
         val_loss: 'last val: (\value)'
         ent: 'ent: (\value)'
 
-- dask:
-  operations:
-    scheduler:
-      workers: 2
+    search_smaller_fn:
+      main: main
+      description: Search a few hparams
+      label: mod_mid
+      flags:
+        line_return: True
+        seed: [521, 1, 2, 3, 4]
+        embed_dim: 36
+        dec_input_size: 5
+        dec_h_size: 5
+        emb_chunks: 3
+        num_embeddings: 10
+        num_hiddens: [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
+        batch_size: 256
+        print_every: 100
+        num_epochs: 400
+        toy_dataset_size: 50000
+      output-scalars:
+        step: 'step: (\step)'
+        loss: 'loss: (\value)'
+        diff: 'diff: (\value)'
+        val_loss: 'last val: (\value)'
+        ent: 'ent: (\value)'
+

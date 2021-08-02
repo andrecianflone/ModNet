@@ -28,15 +28,16 @@ case "$1" in
         1)
             echo "Small model to test"
             eval $BASE \
-                --num_hiddens 10 \
-                --embed_dim 121 \
+                --embed_dim 36 \
+                --dec_input_size 5 \
+                --dec_h_size 5 \
                 --emb_chunks 3 \
                 --num_embeddings 10 \
                 --print_every 10 \
-                --num_hiddens 256 \
-                --batch_size 256 \
+                --num_hiddens 8 \
+                --batch_size 128 \
                 --num_epochs 200 \
-                --toy_dataset_size 20000
+                --toy_dataset_size 10000
 
             ;;
 

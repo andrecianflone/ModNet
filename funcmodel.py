@@ -100,7 +100,7 @@ class FuncMod(nn.Module):
         # self.enc_f = SmallEnc(in_channel, channel)
         self.enc_f = SmallishEnc(in_channel, channel, embed_dim)
 
-        # Projects input to a suitable size to send to function
+        # Embed input x to send to function
         self.enc_x = SmallishEnc(in_channel, channel, dec_input_size)
 
         # self.quantize_conv = nn.Conv2d(channel, embed_dim, 1)

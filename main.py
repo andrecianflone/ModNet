@@ -130,6 +130,9 @@ def main(args):
     model = FuncMod(args).to(device)
     print(f'The model has {utils.count_parameters(model):,} trainable params')
 
+    if args.mode == "test":
+        model.load_state_dict(torch.load(args.save_path))
+
     optimizer = optim.Adam(model.parameters(),lr=args.learning_rate,
                                                                 amsgrad=False)
 
@@ -164,7 +167,7 @@ def main(args):
         if valid_loss < best_valid_loss:
             best_valid_loss = valid_loss
             best_valid_epoch = epoch
-            # torch.save(model.state_dict(), args.save_path)
+            torch.save(model.state_dict(), args.save_path)
         pbar.print_end_epoch()
 
 
@@ -196,8 +199,7 @@ if __name__ == '__main__':
     add('--decay', type=float, default=0.99,
             help='Moving av decay for codebook update')
 
-    # VQVAE model, defaults like in paper
-    add('--model', type=str, choices=['vqvae'], default='vqvae')
+    # VQVAE model
     add('--enc_height', type=int, default=8,
             help="Encoder output size, used for downsampling and KL")
     add('--num_hiddens', type=int, default=10,
@@ -211,18 +213,6 @@ if __name__ == '__main__':
             help='Entropy reg coef (default: 0.01)')
     add('--orth_coef', type=float, default=1e-6, metavar='M',
             help='Orthogonal regularization coef (default: 1e-6)')
-
-    # Diff NearNeigh settings
-    # add('--nn_temp', type=float, default=20.0, metavar='M',
-            # help='Starting diff. nearest neighbour temp (default: 1.0)')
-    # add('--min_temp', type=float, default=1.01, metavar='M',
-            # help='Minimum Nearest neighbour temp (default: 0.01)')
-    # add('--temp_decay_rate', type=float, default=0.9, metavar='M',
-            # help='Nearest neighbour temp decay rate (default: 0.9)')
-    # add('--temp_decay_schedule', type=float, default=100, metavar='M',
-            # help='How many batches before decay (default: 100)')
-    # add('--temp_grad_update', action='store_true', default=False,
-            # help="Update temp only with gradient")
 
     # Func mod settings
     add('--emb_chunks', type=int, default=3,
@@ -245,6 +235,7 @@ if __name__ == '__main__':
             help="Max value in sequence")
 
     # Misc
+    add('--mode', type=str, choices=['train', 'test'], default='train')
     add('--print_every', type=int, default=100,
             help="Print train results after this many batches")
     add('--saved_model_name', type=str, default='func_net.pt')
