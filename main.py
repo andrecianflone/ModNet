@@ -1,7 +1,7 @@
 import argparse
 import os
 import math
-import data
+import datautil as data
 import torch
 from utils import utils
 
@@ -30,15 +30,36 @@ def func_net_loss(args, x, y, vq_loss, model):
 
     return loss, diff
 
+def cluster_evaluation(args, loader, model):
+    """
+    Evaluate the clustering quality. Show graphs and compute metrics
+    """
+    model.eval()
+    emb_idx_ls = []
+    with torch.no_grad():
+        # Loop data in epoch
+        for x, y, y_op in valid_loader:
+
+            x = x.to(args.device)
+            y = y.to(args.device)
+
+            # Get reconstruction and vector quantization loss
+            # `x_prime`: reconstruction of `input`
+            # `vq_loss`: MSE(encoded embeddings, nearest emb in codebooks)
+            x_prime, vq_loss, emb_idx, perplexity = model(x)
+            emb_idx_ls.append(emb_idx)
+
+    print()
+
 def evaluate(args, loss_func, pbar, valid_loader, model):
     """
-    Train for one epoch
+    Evaluate model
     """
     model.eval()
     valid_loss = []
     with torch.no_grad():
         # Loop data in epoch
-        for x, y in valid_loader:
+        for x, y, y_op in valid_loader:
 
             x = x.to(args.device)
             y = y.to(args.device)
@@ -65,7 +86,7 @@ def train_epoch(args, loss_func, pbar, train_loader, model, optimizer,
     model.train()
     train_cb_entropy = []
     # Loop data in epoch
-    for x, y in train_loader:
+    for x, y, y_op in train_loader:
 
         # This break used for debugging
         if args.max_iterations is not None:
@@ -110,29 +131,13 @@ def train_epoch(args, loss_func, pbar, train_loader, model, optimizer,
                                         # ppl=float(perplexity), increment=100)
         args.global_it += 1
 
-def main(args):
+def test():
+    pass
+
+def train(args, model, train_loader, valid_loader):
     ###############################
-    # TRAIN PREP
+    # MAIN TRAIN LOOP
     ###############################
-    print("Loading data")
-    train_loader, valid_loader, test_loader, d_settings = \
-                                data.get_toy_data(args)
-
-    args.input_size = [d_settings["seq_len"]]
-    args.downsample = args.input_size[-1]
-    # args.downsample = args.input_size[-1] // args.enc_height
-    # args.data_variance = data_var
-    print(f"Training set size {len(train_loader.dataset)}")
-    print(f"Validation set size {len(valid_loader.dataset)}")
-    print(f"Test set size {len(test_loader.dataset)}")
-
-    print("Loading model")
-    model = FuncMod(args).to(device)
-    print(f'The model has {utils.count_parameters(model):,} trainable params')
-
-    if args.mode == "test":
-        model.load_state_dict(torch.load(args.save_path))
-
     optimizer = optim.Adam(model.parameters(),lr=args.learning_rate,
                                                                 amsgrad=False)
 
@@ -141,14 +146,6 @@ def main(args):
     pbar = Progress(num_batches, bar_length=10, custom_increment=True,
             line_return=args.line_return)
 
-    # Needed for bpd
-    # args.KL = args.enc_height * args.enc_height * args.num_codebooks * \
-                                                # np.log(args.num_embeddings)
-    # args.num_pixels  = np.prod(args.input_size)
-
-    ###############################
-    # MAIN TRAIN LOOP
-    ###############################
     best_valid_loss = float('inf')
     train_bpd = []
     train_recon_error = []
@@ -169,6 +166,31 @@ def main(args):
             best_valid_epoch = epoch
             torch.save(model.state_dict(), args.save_path)
         pbar.print_end_epoch()
+
+def main(args):
+    ###############################
+    # TRAIN PREP
+    ###############################
+    print("Loading data")
+    train_loader, valid_loader, test_loader, d_settings = \
+                                data.get_toy_data(args)
+
+    args.input_size = [d_settings["seq_len"]]
+    args.downsample = args.input_size[-1]
+    print(f"Training set size {len(train_loader.dataset)}")
+    print(f"Validation set size {len(valid_loader.dataset)}")
+    print(f"Test set size {len(test_loader.dataset)}")
+
+    print("Loading model")
+    model = FuncMod(args).to(device)
+    print(f'The model has {utils.count_parameters(model):,} trainable params')
+
+    if args.mode == "test":
+        model.load_state_dict(torch.load(args.save_path))
+        test(args, model)
+    else:
+        train(args, model, train_loader, valid_loader)
+
 
 
 if __name__ == '__main__':
@@ -239,7 +261,7 @@ if __name__ == '__main__':
     add('--print_every', type=int, default=100,
             help="Print train results after this many batches")
     add('--saved_model_name', type=str, default='func_net.pt')
-    add('--saved_model_dir', type=str, default='saved_models/')
+    add('--saved_model_dir', type=str, default='results/')
     add('--seed', type=int, default=521)
     add('--line_return', action='store_true', default=False,
             help="If True, print one line in output per batch")

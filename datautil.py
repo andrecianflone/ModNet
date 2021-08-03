@@ -46,19 +46,24 @@ def operator_targets(ops: List[Callable], data: np.ndarray):
     chunks = np.array_split(data, len(ops))
     new_x = [None]*len(ops)
     labels = [None]*len(ops)
+    labels_op = [None]*len(ops)
 
     # Split and process
     for i, chunk in enumerate(chunks):
         # Apply the function for each row in chunk
         label = np.apply_along_axis(ops[i], axis=1, arr=chunk)
         labels[i] = np.vstack(label)
-        # Prepend data with index i
+        # Prepend data with index i as a function indicator
         new_x[i] = np.insert(chunk, 0, i, axis=1)
+        # Extra target is label class, used for evaluation
+        labels_op[i] = np.vstack(new_x[i][:,0])
 
-    # TODO: stack new data and labels
+
     new_x = np.concatenate(new_x, axis=0)
     labels = np.concatenate(labels, axis=0)
-    return new_x, labels
+    labels_op = np.concatenate(labels_op, axis=0)
+
+    return new_x, labels, labels_op
 
 def make_op_dataset(low,high,samples, seq_len, batch_size,ops):
     """
@@ -96,7 +101,7 @@ def make_op_dataset(low,high,samples, seq_len, batch_size,ops):
     loaders = []
     for inp in inputs:
         # Get targets and modified inputs
-        x_in, y = operator_targets(ops, inp)
+        x_in, y, y_class = operator_targets(ops, inp)
 
         # Make PyTorch dataloaders
         params = {'batch_size': batch_size,
@@ -105,7 +110,8 @@ def make_op_dataset(low,high,samples, seq_len, batch_size,ops):
 
         x_in = torch.from_numpy(np.float32(x_in))
         y = torch.from_numpy(np.float32(y))
-        dataset = torch.utils.data.TensorDataset(x_in, y)
+        y_op = torch.from_numpy(np.float32(y_op))
+        dataset = torch.utils.data.TensorDataset(x_in, y, y_op)
         loader = torch.utils.data.DataLoader(dataset, **params)
         loaders.append(loader)
 

@@ -17,13 +17,17 @@
       main: main
       description: Train a very small model just to test
       label: small
+      sourcecode:
+        - exclude: '*swp'
+        - exclude: 'tags'
+        - exclude: '__pycache__*'
       flags:
         line_return: True
         embed_dim: 121
         emb_chunks: 3
         num_embeddings: 10
-        num_hiddens: [10, 20]
-        batch_size: 256
+        num_hiddens: 10
+        batch_size: 64
         print_every: 10
         num_epochs: 100
         toy_dataset_size: 1000
