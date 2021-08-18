@@ -101,7 +101,7 @@ def make_op_dataset(low,high,samples, seq_len, batch_size,ops):
     loaders = []
     for inp in inputs:
         # Get targets and modified inputs
-        x_in, y, y_class = operator_targets(ops, inp)
+        x_in, y, y_op = operator_targets(ops, inp)
 
         # Make PyTorch dataloaders
         params = {'batch_size': batch_size,
