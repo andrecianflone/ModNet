@@ -10,6 +10,7 @@ import numpy as np
 from funcmodel import FuncMod
 import torch.optim as optim
 from torch import nn
+from sklearn.metrics import confusion_matrix
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -35,10 +36,11 @@ def cluster_evaluation(args, loader, model):
     Evaluate the clustering quality. Show graphs and compute metrics
     """
     model.eval()
-    emb_idx_ls = []
+    model_function_id = []
+    data_function_id = []
     with torch.no_grad():
         # Loop data in epoch
-        for x, y, y_op in valid_loader:
+        for x, y, y_op in loader:
 
             x = x.to(args.device)
             y = y.to(args.device)
@@ -47,9 +49,37 @@ def cluster_evaluation(args, loader, model):
             # `x_prime`: reconstruction of `input`
             # `vq_loss`: MSE(encoded embeddings, nearest emb in codebooks)
             x_prime, vq_loss, emb_idx, perplexity = model(x)
-            emb_idx_ls.append(emb_idx)
+            emb_idx = emb_idx.cpu().numpy()
+            y_op = y_op.cpu().numpy()
+            model_function_id.append(emb_idx)
+            data_function_id.append(y_op)
 
+
+    model_function_id = np.concatenate(model_function_id , axis=0)
+    data_function_id = np.concatenate(data_function_id, axis=0)
+    l1 = np.unique(model_function_id)
+    l2 = np.unique(data_function_id)
+    labels = np.unique(np.concatenate([l1,l2]))
+    mat = confusion_matrix(model_function_id, data_function_id, labels)
+
+    # Write result to file
+    file_path = os.path.join(args.saved_model_dir, 'data.dat')
+    if os.path.exists(file_path):
+            os.remove(file_path)
+    with open(file_path, 'a') as f:
+    # Only save non-zero results
+        for i, r in enumerate(mat):
+            if np.sum(r)>0:
+                num = ','.join(map(str,r))
+                line = f'{int(labels[i])},{num}\n'
+                f.write(line)
+
+    # Call termgraph to print
     print()
+    cmd = f'termgraph {file_path} --stacked --width 30 --title "Confusion Matrix"'
+    os.system(cmd)
+    print()
+
 
 def evaluate(args, loss_func, pbar, valid_loader, model):
     """
@@ -165,6 +195,7 @@ def train(args, model, train_loader, valid_loader):
             best_valid_loss = valid_loss
             best_valid_epoch = epoch
             torch.save(model.state_dict(), args.save_path)
+            cluster_evaluation(args, valid_loader, model)
         pbar.print_end_epoch()
 
 def main(args):

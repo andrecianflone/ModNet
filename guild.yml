@@ -50,7 +50,7 @@
         batch_size: 256
         print_every: 100
         num_epochs: 200
-        toy_dataset_size: 20000
+        toy_dataset_size: 10000
       output-scalars:
         step: 'step: (\step)'
         loss: 'loss: (\value)'
@@ -61,7 +61,7 @@
     search_smaller_fn:
       main: main
       description: Search a few hparams
-      label: mod_mid
+      label: test
       flags:
         line_return: True
         seed: [521, 1, 2, 3, 4]
