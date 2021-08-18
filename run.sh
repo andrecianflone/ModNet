@@ -35,24 +35,26 @@ case "$1" in
                 --num_embeddings 10 \
                 --print_every 10 \
                 --num_hiddens 8 \
-                --batch_size 128 \
+                --batch_size 64 \
                 --num_epochs 200 \
-                --toy_dataset_size 10000
+                --toy_dataset_size 2000
 
             ;;
 
         2)
-            echo "Very small model to test"
+            echo "Good model to test"
             eval $BASE \
-                --num_hiddens 10 \
+                --seed 521 \
                 --embed_dim 36 \
-                --emb_chunks 3 \
-                --num_embeddings 10 \
                 --dec_input_size 5 \
                 --dec_h_size 5 \
-                --batch_size 1 \
-                --num_epochs 100 \
-                --toy_dataset_size 10000
+                --emb_chunks 3 \
+                --num_embeddings 10 \
+                --num_hiddens 256 \
+                --batch_size 256 \
+                --print_every 100 \
+                --num_epochs 10000 \
+                --toy_dataset_size 10000 \
 
             ;;
 
